@@ -7,7 +7,7 @@ Este proyecto utiliza la metodología **SDD (Spec-Driven Development)** y memori
 ### 1. Memoria Persistente (Engram)
 - Antes de iniciar cualquier tarea, debes consultar la memoria reciente del proyecto usando `engram context` o realizar búsquedas con `engram search`.
 - Al finalizar una decisión técnica importante, resolver un bug complejo o cambiar configuraciones, debes guardar el aprendizaje inmediatamente ejecutando:
-  `engram save "Título descriptivo" "Detalles técnicos del cambio, por qué y dónde se realizó" --project facebookBOT`
+  `engram save "Título descriptivo" "Detalles técnicos del cambio, por qué y dónde se realizó" --project Gestor`
 - Al final de la sesión, escribe un resumen con el formato de Engram (`## Goal`, `## Discoveries`, `## Accomplished`, `## Next Steps`).
 
 ### 2. Spec-Driven Development (SDD)

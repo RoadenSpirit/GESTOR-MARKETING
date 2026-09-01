@@ -1,0 +1,667 @@
+{
+  "id": "yqOdEH1gMiuvUHN6",
+  "name": "Worker WhatsApp",
+  "active": true,
+  "nodes": [
+    {
+      "id": "d067805a-e143-4d6b-9cf7-3a60a6906192",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "disabled": false,
+      "position": [
+        100,
+        500
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 60
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "85fe5c6d-b607-4a8e-8948-6eb96b5aface",
+      "name": "Calc Initial Delay",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        300,
+        500
+      ],
+      "parameters": {
+        "jsCode": "const minDelay = 1;\nconst maxDelay = 30;\nconst randomMin = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;\nreturn [{ json: { delayMs: randomMin * 60 * 1000, randomMin } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "6736cc86-def7-4ad6-8ff1-11fb56577631",
+      "name": "Wait Initial Delay",
+      "type": "n8n-nodes-base.wait",
+      "position": [
+        500,
+        500
+      ],
+      "webhookId": "10a519a6-f655-4b3a-94d6-3772bcfa460e",
+      "parameters": {
+        "unit": "seconds",
+        "amount": "={{ $json.delayMs / 1000 }}"
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "get-target-group",
+      "name": "Get Target Group",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        700,
+        500
+      ],
+      "parameters": {
+        "query": "SELECT id AS target_group_id, nombre AS target_group_name FROM whatsapp_groups WHERE activo = true ORDER BY ultimo_envio ASC NULLS FIRST, orden ASC LIMIT 1;",
+        "operation": "executeQuery"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "qq6LeroBSIWTFfx2",
+          "name": "postgres_carmay"
+        }
+      },
+      "typeVersion": 2.2
+    },
+    {
+      "id": "970ae496-3085-423e-affe-da2eeef9173e",
+      "name": "Get Pending Batch",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        900,
+        500
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT id, producto, drive_id FROM whatsapp_queue q WHERE ((q.estado = 'PENDIENTE' AND NOT ('{{ $('Get Target Group').item.json.target_group_id }}' = ANY(q.grupos_enviados))) OR (q.estado = 'FALLIDO' AND q.fecha_envio <= NOW() - INTERVAL '24 hours' AND NOT ('{{ $('Get Target Group').item.json.target_group_id }}' = ANY(q.grupos_enviados)))) AND q.drive_id IS NOT NULL AND length(q.drive_id) >= 25 ORDER BY CASE WHEN q.estado = 'PENDIENTE' THEN 0 ELSE 1 END ASC, q.id ASC LIMIT 3;"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "qq6LeroBSIWTFfx2",
+          "name": "postgres_carmay"
+        }
+      },
+      "typeVersion": 2.2
+    },
+    {
+      "id": "e7c55663-9633-4692-ab89-9073fe36296a",
+      "name": "If Has Pending",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        1100,
+        500
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-real-data",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $input.first().json.id !== undefined && $input.first().json.producto !== undefined }}",
+              "rightValue": true
+            }
+          ]
+        }
+      },
+      "typeVersion": 2.3
+    },
+    {
+      "id": "bb6c5970-4c56-40a0-88a1-c1f62620a5f0",
+      "name": "Loop Batch",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [
+        1300,
+        500
+      ],
+      "parameters": {
+        "options": {}
+      },
+      "typeVersion": 3
+    },
+    {
+      "id": "update-group-last-sent",
+      "name": "Update Group Last Sent",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1500,
+        350
+      ],
+      "parameters": {
+        "query": "=UPDATE whatsapp_groups SET ultimo_envio = NOW() WHERE id = '{{ $('Get Target Group').item.json.target_group_id }}';",
+        "operation": "executeQuery"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "qq6LeroBSIWTFfx2",
+          "name": "postgres_carmay"
+        }
+      },
+      "typeVersion": 2.2
+    },
+    {
+      "id": "20f8ae76-3a61-4d3d-b11d-8a06123cd7f9",
+      "name": "Calc Organic Delay",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1500,
+        500
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst minSec = 60;\nconst maxSec = 180;\nconst delaySec = Math.floor(Math.random() * (maxSec - minSec + 1)) + minSec;\nreturn [{ json: { ...item, delayMs: delaySec * 1000, delaySec } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "82f664e5-d67c-4b1e-bda7-78c5a0802fa7",
+      "name": "Wait Organic Delay",
+      "type": "n8n-nodes-base.wait",
+      "position": [
+        1700,
+        500
+      ],
+      "webhookId": "b82e3710-0b4b-4502-a9c8-9beeba82f25c",
+      "parameters": {
+        "unit": "seconds",
+        "amount": "={{ $json.delaySec }}"
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "8ad6d05e-0be8-47ae-821a-1f44978e8511",
+      "name": "Download Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "onError": "continueErrorOutput",
+      "position": [
+        1900,
+        500
+      ],
+      "parameters": {
+        "url": "=https://drive.usercontent.google.com/download?id={{ $json.drive_id }}&export=download&confirm=t",
+        "method": "GET",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "typeVersion": 4.2
+    },
+    {
+      "id": "check-download-success",
+      "name": "🔀 ¿Descarga Exitosa?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        2100,
+        500
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "condition-download-success",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "leftValue": "={{ !$json.error }}",
+              "rightValue": true
+            }
+          ]
+        }
+      },
+      "typeVersion": 2.3
+    },
+    {
+      "id": "send-download-error-alert",
+      "name": "Send Download Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        2300,
+        600
+      ],
+      "parameters": {
+        "url": "http://baileys-sales-api:3000/send",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "json",
+        "sendHeaders": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chatId",
+              "value": "REDACTED_PHONE_1"
+            },
+            {
+              "name": "message",
+              "value": "=⚠️ *Alerta del Gestor Bot*:\nError al procesar el producto: *{{ $('Loop Batch').item.json.producto || 'Desconocido' }}*\nMotivo: El archivo no se pudo descargar de Google Drive.\nID del archivo: {{ $('Loop Batch').item.json.drive_id || 'VACÍO — sin DRIVE_ID' }}"
+            }
+          ]
+        },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "REDACTED_BAILEYS_API_KEY"
+            }
+          ]
+        }
+      },
+      "typeVersion": 4.2
+    },
+    {
+      "id": "23d2099b-173a-485a-af29-1456b42f888b",
+      "name": "Send WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "onError": "continueErrorOutput",
+      "position": [
+        2300,
+        400
+      ],
+      "parameters": {
+        "url": "http://baileys-sales-api:3000/send-file",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "sendHeaders": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chatId",
+              "value": "={{ $('Get Target Group').item.json.target_group_id }}",
+              "parameterType": "formData"
+            },
+            {
+              "name": "fileName",
+              "value": "={{ ($('Loop Batch').item.json.producto || 'producto') + '.png' }}",
+              "parameterType": "formData"
+            },
+            {
+              "name": "file",
+              "parameterType": "formBinaryData",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "REDACTED_BAILEYS_API_KEY"
+            }
+          ]
+        }
+      },
+      "typeVersion": 4.2
+    },
+    {
+      "id": "check-send-success",
+      "name": "🔀 ¿Envío Exitoso?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        2500,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "condition-send-success",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              },
+              "leftValue": "={{ !$json.error }}",
+              "rightValue": true
+            }
+          ]
+        }
+      },
+      "typeVersion": 2.3
+    },
+    {
+      "id": "send-send-error-alert",
+      "name": "Send Send Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        2700,
+        500
+      ],
+      "parameters": {
+        "url": "http://baileys-sales-api:3000/send",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "json",
+        "sendHeaders": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chatId",
+              "value": "REDACTED_PHONE_1"
+            },
+            {
+              "name": "message",
+              "value": "=⚠️ *Alerta del Gestor Bot*:\nError al enviar el producto: *{{ $('Loop Batch').item.json.producto }}* al grupo *{{ $('Get Target Group').item.json.target_group_name }}*.\nError: {{ $json.error?.message || $json.error || 'Desconocido' }}"
+            }
+          ]
+        },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "REDACTED_BAILEYS_API_KEY"
+            }
+          ]
+        }
+      },
+      "typeVersion": 4.2
+    },
+    {
+      "id": "0b9cbdd2-cb4e-46ac-aa25-29c39236ef5a",
+      "name": "Mark Completed",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        2700,
+        300
+      ],
+      "parameters": {
+        "query": "=INSERT INTO whatsapp_sent_log (producto, drive_id, group_id) VALUES ('{{ $('Loop Batch').item.json.producto }}', '{{ $('Loop Batch').item.json.drive_id }}', '{{ $('Get Target Group').item.json.target_group_id }}'); UPDATE whatsapp_queue SET grupos_enviados = array_append(grupos_enviados, '{{ $('Get Target Group').item.json.target_group_id }}'), estado = CASE WHEN (SELECT count(*) FROM whatsapp_groups WHERE activo = true) <= array_length(array_append(grupos_enviados, '{{ $('Get Target Group').item.json.target_group_id }}'), 1) THEN 'COMPLETADO' ELSE 'PENDIENTE' END, fecha_envio = CASE WHEN (SELECT count(*) FROM whatsapp_groups WHERE activo = true) <= array_length(array_append(grupos_enviados, '{{ $('Get Target Group').item.json.target_group_id }}'), 1) THEN NOW() ELSE fecha_envio END WHERE id = {{ $('Loop Batch').item.json.id }};",
+        "operation": "executeQuery"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "qq6LeroBSIWTFfx2",
+          "name": "postgres_carmay"
+        }
+      },
+      "typeVersion": 2.2
+    },
+    {
+      "id": "mark-failed-db",
+      "name": "❌ Marcar como Fallido",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        2900,
+        600
+      ],
+      "parameters": {
+        "query": "=UPDATE whatsapp_queue SET estado = 'FALLIDO', fecha_envio = NOW() WHERE id = COALESCE({{ $('Loop Batch').item.json.id }}, -1);",
+        "operation": "executeQuery"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "qq6LeroBSIWTFfx2",
+          "name": "postgres_carmay"
+        }
+      },
+      "typeVersion": 2.2,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Loop Batch": {
+      "main": [
+        [
+          {
+            "node": "Update Group Last Sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Calc Organic Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "🔀 ¿Envío Exitoso?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "❌ Marcar como Fallido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image": {
+      "main": [
+        [
+          {
+            "node": "🔀 ¿Descarga Exitosa?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🔀 ¿Descarga Exitosa?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Has Pending": {
+      "main": [
+        [
+          {
+            "node": "Loop Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Completed": {
+      "main": [
+        [
+          {
+            "node": "Loop Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Target Group": {
+      "main": [
+        [
+          {
+            "node": "Get Pending Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Calc Initial Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Pending Batch": {
+      "main": [
+        [
+          {
+            "node": "If Has Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calc Initial Delay": {
+      "main": [
+        [
+          {
+            "node": "Wait Initial Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calc Organic Delay": {
+      "main": [
+        [
+          {
+            "node": "Wait Organic Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Initial Delay": {
+      "main": [
+        [
+          {
+            "node": "Get Target Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Organic Delay": {
+      "main": [
+        [
+          {
+            "node": "Download Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Send Error Alert": {
+      "main": [
+        [
+          {
+            "node": "❌ Marcar como Fallido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 ¿Envío Exitoso?": {
+      "main": [
+        [
+          {
+            "node": "Mark Completed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Send Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "❌ Marcar como Fallido": {
+      "main": [
+        [
+          {
+            "node": "Loop Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 ¿Descarga Exitosa?": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Download Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Download Error Alert": {
+      "main": [
+        [
+          {
+            "node": "❌ Marcar como Fallido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true
+  }
+}

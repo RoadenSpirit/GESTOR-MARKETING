@@ -1,0 +1,952 @@
+{
+  "id": "OWmKP2Me3WJSzlWc",
+  "name": "Marketing Expert",
+  "active": true,
+  "nodes": [
+    {
+      "id": "note-stage1-id",
+      "name": "📝 Nota: Disparo y Carga",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        64,
+        80
+      ],
+      "parameters": {
+        "color": 6,
+        "width": 380,
+        "height": 280,
+        "content": "### 📅 ETAPA 1: DISPARO Y CARGA\n- Disparador por horas.\n- Lee catálogo maestro desde Google Sheets."
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "note-stage2-id",
+      "name": "📝 Nota: Evaluación de Estado",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        464,
+        80
+      ],
+      "parameters": {
+        "color": 4,
+        "width": 380,
+        "height": 280,
+        "content": "### ⚙️ ETAPA 2: EVALUACIÓN DE ESTADO\n- Filtra productos elegibles.\n- Comprueba la ventana de exclusión de 48h por canal."
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "note-stage3-id",
+      "name": "📝 Nota: Motor de Decisión",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        864,
+        80
+      ],
+      "parameters": {
+        "color": 3,
+        "width": 1288,
+        "height": 280,
+        "content": "### 🧠 ETAPA 3: MOTOR DE DECISIÓN AI\n- Invoca a `agy` (Gemini 3.5 Flash) de forma stateless.\n- Prioriza agrupamiento de categorías, rebajas y stock bajo."
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "note-stage4-id",
+      "name": "📝 Nota: Enrutamiento y Ejecución",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2400,
+        1184
+      ],
+      "parameters": {
+        "color": 5,
+        "width": 1676,
+        "height": 940,
+        "content": "### 🔀 ETAPA 4: ENRUTAMIENTO Y EJECUCIÓN MULTICANAL\n- Bifurca según necesidad de reinicio total de la rotación.\n- Ejecuta sub-flujos dedicados para Facebook, Instagram, WhatsApp y Telegram de manera paralela.\n- Actualiza los estados de envío y marcas de tiempo por canal."
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "note-error-id",
+      "name": "📝 Nota: Control de Errores",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        960,
+        784
+      ],
+      "parameters": {
+        "width": 500,
+        "height": 280,
+        "content": "### 🚨 GESTIÓN DE ERRORES\n- Captura fallos de cualquier nodo crítico.\n- Alerta inmediata a tu grupo de WhatsApp vía Green API."
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "trigger-id",
+      "name": "⏰ Temporizador (1 Hora)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        112,
+        240
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "read-sheet-id",
+      "name": "📊 Leer Catálogo Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        288,
+        240
+      ],
+      "parameters": {
+        "options": {},
+        "sheetName": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1LbjE6NzELt5e_bi02DgLeOojJh_v2WIyuvaGu3fm3hU/edit?gid=989610724#gid=989610724"
+        },
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1LbjE6NzELt5e_bi02DgLeOojJh_v2WIyuvaGu3fm3hU/edit?gid=989610724#gid=989610724"
+        },
+        "authentication": "serviceAccount"
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "j7hN33tnv2xadMZJ",
+          "name": "Google Sheets account 4"
+        }
+      },
+      "typeVersion": 4.7
+    },
+    {
+      "id": "pre-process-id",
+      "name": "⚙️ Evaluar Estado Multicanal",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        512,
+        240
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst now = Date.now();\nlet cooldownHours = 48;\ntry {\n  cooldownHours = $('⚙️ Variables de Configuración').first().json.COOLDOWN_HOURS || 48;\n} catch(e) {}\nconst COOLDOWN_MS = cooldownHours * 60 * 60 * 1000;\n\n// Filter out empty rows (like row 23 with empty PRODUCTO)\nconst validItems = items.filter(item => (item.json?.PRODUCTO || '').toString().trim() !== '');\n\nconst driveFiltered = validItems.filter(item => {\n  const driveId = (item.json?.DRIVE_ID || '').toString().trim();\n  return driveId.length >= 25 && /^[a-zA-Z0-9_-]+$/.test(driveId);\n});\n\nconst candidatos = driveFiltered.map(item => {\n  const p = item.json;\n  \n  const fechaEnvio = p.FECHA_ENVIO ? new Date(p.FECHA_ENVIO).getTime() : 0;\n  const facebookElegible = (p.FACEBOOK || '') !== 'ENVIADO' || (now - fechaEnvio >= COOLDOWN_MS);\n  const instagramElegible = (p.INSTAGRAM || '') !== 'ENVIADO' || (now - fechaEnvio >= COOLDOWN_MS);\n  const whatsappElegible = (p.WHATSAPP || '') !== 'ENVIADO' || (now - fechaEnvio >= COOLDOWN_MS);\n  const telegramElegible = (p.TELEGRAM || '') !== 'ENVIADO' || (now - fechaEnvio >= COOLDOWN_MS);\n\n  return {\n    PRODUCTO: p.PRODUCTO,\n    DRIVE_ID: p.DRIVE_ID,\n    CATEGORIA: p.CATEGORIA || p.CATEGORÍA,\n    STOCK: p.STOCK,\n    REBAJA: p.REBAJA,\n    facebook_elegible: facebookElegible,\n    instagram_elegible: instagramElegible,\n    whatsapp_elegible: whatsappElegible,\n    telegram_elegible: telegramElegible,\n  };\n});\n\nreturn [{\n  json: {\n    candidatos\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "write-context-id",
+      "name": "💾 Guardar contexto.json",
+      "type": "n8n-nodes-base.readWriteFile",
+      "position": [
+        880,
+        240
+      ],
+      "parameters": {
+        "options": {},
+        "fileName": "/data/tmp_post/contexto.json",
+        "operation": "write"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "read-decision-id",
+      "name": "📖 Leer decision.json",
+      "type": "n8n-nodes-base.readWriteFile",
+      "position": [
+        1824,
+        224
+      ],
+      "parameters": {
+        "options": {},
+        "fileSelector": "/data/tmp_post/decision.json"
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "parse-decision-id",
+      "name": "⚙️ Parsear Decisión",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        2016,
+        224
+      ],
+      "parameters": {
+        "jsCode": "let fileContent = \"\";\nconst binaryData = $input.first().binary?.data;\nif (binaryData) {\n  const binaryBuffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n  fileContent = binaryBuffer.toString('utf8');\n} else {\n  const allItems = $input.all();\n  fileContent = allItems[0]?.json?.data || allItems[0]?.json?.fileContent;\n}\n\nif (typeof fileContent === \"string\") {\n  fileContent = JSON.parse(fileContent);\n}\n\nreturn [{\n  json: fileContent\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "facebook-subflow-id",
+      "name": "💻 Facebook Sub-flujo",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [
+        3200,
+        -80
+      ],
+      "parameters": {
+        "options": {},
+        "workflowId": "fbPosterWorkflow"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "whatsapp-subflow-id",
+      "name": "📲 WhatsApp Sub-flujo",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [
+        3200,
+        176
+      ],
+      "parameters": {
+        "workflowId": "NgPFwrUQufkxh8K1"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "instagram-subflow-id",
+      "name": "📸 Instagram Sub-flujo",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [
+        3200,
+        416
+      ],
+      "parameters": {
+        "options": {},
+        "workflowId": "K9Fi6q9MLm2J0Ftp"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "telegram-subflow-id",
+      "name": "✈️ Telegram Sub-flujo",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "position": [
+        3200,
+        672
+      ],
+      "parameters": {
+        "options": {},
+        "workflowId": "exAcRDElb4vYlMMY"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "mark-sent-id",
+      "name": "📝 Actualizar Estados Canales",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        3760,
+        304
+      ],
+      "parameters": {
+        "columns": {
+          "value": {
+            "FACEBOOK": "={{ $('⚙️ Parsear Decisión').first().json.facebook_product ? 'ENVIADO' : '' }}",
+            "PRODUCTO": "={{ $('⚙️ Parsear Decisión').first().json.facebook_product?.PRODUCTO || $('⚙️ Parsear Decisión').first().json.whatsapp_product?.PRODUCTO || $('⚙️ Parsear Decisión').first().json.instagram_product?.PRODUCTO || $('⚙️ Parsear Decisión').first().json.telegram_product?.PRODUCTO || '' }}",
+            "TELEGRAM": "={{ $('⚙️ Parsear Decisión').first().json.telegram_product ? 'ENVIADO' : '' }}",
+            "WHATSAPP": "={{ $('⚙️ Parsear Decisión').first().json.whatsapp_product ? 'ENVIADO' : '' }}",
+            "INSTAGRAM": "={{ $('⚙️ Parsear Decisión').first().json.instagram_product ? 'ENVIADO' : '' }}",
+            "FECHA_ENVIO": "={{ $now.setZone('America/Havana').toFormat('yyyy-MM-dd HH:mm:ss') }}"
+          },
+          "schema": [
+            {
+              "id": "PRODUCTO",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "PRODUCTO",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "DRIVE_ID",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "DRIVE_ID",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ESTADO",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "ESTADO",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "FECHA_SOLICITUD",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "FECHA_SOLICITUD",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "FECHA_ENVIO",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "FECHA_ENVIO",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "CATEGORIA",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "CATEGORIA",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "FACEBOOK",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "FACEBOOK",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "WHATSAPP",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "WHATSAPP",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "INSTAGRAM",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "INSTAGRAM",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "TELEGRAM",
+              "type": "string",
+              "display": true,
+              "required": false,
+              "displayName": "TELEGRAM",
+              "defaultMatch": false,
+              "canBeUsedToMatch": true
+            }
+          ],
+          "mappingMode": "defineBelow",
+          "matchingColumns": [
+            "PRODUCTO"
+          ]
+        },
+        "options": {},
+        "operation": "appendOrUpdate",
+        "sheetName": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1LbjE6NzELt5e_bi02DgLeOojJh_v2WIyuvaGu3fm3hU/edit?gid=989610724#gid=989610724"
+        },
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1LbjE6NzELt5e_bi02DgLeOojJh_v2WIyuvaGu3fm3hU/edit?gid=989610724#gid=989610724"
+        },
+        "authentication": "serviceAccount"
+      },
+      "credentials": {
+        "googleApi": {
+          "id": "j7hN33tnv2xadMZJ",
+          "name": "Google Sheets account 4"
+        }
+      },
+      "executeOnce": false,
+      "typeVersion": 4.7
+    },
+    {
+      "id": "if-error-detected-id",
+      "name": "🔀 ¿Error Detectado?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        1008,
+        944
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 3,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "condition-1782403960121-ncyksj2ac",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.error || $json.message || $json.stderr }}"
+            }
+          ]
+        }
+      },
+      "typeVersion": 2.3
+    },
+    {
+      "id": "notify-error-whatsapp-id",
+      "name": "📲 Notificar Error por WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1264,
+        944
+      ],
+      "parameters": {
+        "sendBody": true,
+        "url": "https://api.green-api.com/waInstance7107636935/sendMessage/96afcbb4da3642dcbdf867b8522ffa3a81cddd8edaf348f983",
+        "method": "POST",
+        "specifyBody": "json",
+        "options": {},
+        "jsonBody": "={\n  \"chatId\": \"120363425558134480@g.us\",\n  \"message\": \"🚨 *Alerta Marketing Expert* \\nFallo detectado en el flujo orquestador central. Detalle: {{ $json.message || $json.error || 'Fallo en nodo del flujo orquestador' }}\"\n}"
+      },
+      "typeVersion": 4.2
+    },
+    {
+      "id": "convert-to-file-id",
+      "name": "⚙️ Convertir a Archivo",
+      "type": "n8n-nodes-base.convertToFile",
+      "position": [
+        704,
+        240
+      ],
+      "parameters": {
+        "options": {},
+        "operation": "toJson"
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "6d5a15a8-9d9b-4b35-aab4-74f10a07e090",
+      "name": "Unificador de Canales",
+      "type": "n8n-nodes-base.merge",
+      "position": [
+        3504,
+        304
+      ],
+      "parameters": {
+        "numberInputs": 4
+      },
+      "typeVersion": 3
+    },
+    {
+      "id": "0f2168e5-0d6a-429c-acd2-cd2c1dbf97b4",
+      "name": "Normalizar Facebook",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        2704,
+        -80
+      ],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nlet cooldownHours = 48;\ntry {\n  cooldownHours = $('⚙️ Variables de Configuración').first().json.COOLDOWN_HOURS || 48;\n} catch(e) {}\nconst p = input.facebook_product;\nconst dr = typeof (p && p.DRIVE_ID) === 'string' ? p.DRIVE_ID.trim() : '';\nconst prodOk = p && typeof p.PRODUCTO === 'string' && p.PRODUCTO.trim() !== '' && p.PRODUCTO.trim().toUpperCase() !== 'N/A';\nconst driveOk = dr.length >= 25 && /^[a-zA-Z0-9_-]{25,}$/.test(dr);\nif (prodOk && driveOk) {\n  return [{\n    json: {\n      PRODUCTO: p.PRODUCTO,\n      DRIVE_ID: dr,\n      COOLDOWN_HOURS: cooldownHours\n    }\n  }];\n}\nreturn [];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "6f2aa96f-093f-4ff2-90c1-a53e1d03d094",
+      "name": "Normalizar WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        2704,
+        176
+      ],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nlet cooldownHours = 48;\ntry {\n  cooldownHours = $('⚙️ Variables de Configuración').first().json.COOLDOWN_HOURS || 48;\n} catch(e) {}\nconst p = input.whatsapp_product;\nconst dr = typeof (p && p.DRIVE_ID) === 'string' ? p.DRIVE_ID.trim() : '';\nconst prodOk = p && typeof p.PRODUCTO === 'string' && p.PRODUCTO.trim() !== '' && p.PRODUCTO.trim().toUpperCase() !== 'N/A';\nconst driveOk = dr.length >= 25 && /^[a-zA-Z0-9_-]{25,}$/.test(dr);\nif (prodOk && driveOk) {\n  return [{\n    json: {\n      PRODUCTO: p.PRODUCTO,\n      DRIVE_ID: dr,\n      COOLDOWN_HOURS: cooldownHours\n    }\n  }];\n}\nreturn [];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "12c08618-ece0-4523-8652-5b89366ff4ee",
+      "name": "Normalizar Instagram",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        2704,
+        416
+      ],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nlet cooldownHours = 48;\ntry {\n  cooldownHours = $('⚙️ Variables de Configuración').first().json.COOLDOWN_HOURS || 48;\n} catch(e) {}\nconst p = input.instagram_product;\nconst dr = typeof (p && p.DRIVE_ID) === 'string' ? p.DRIVE_ID.trim() : '';\nconst prodOk = p && typeof p.PRODUCTO === 'string' && p.PRODUCTO.trim() !== '' && p.PRODUCTO.trim().toUpperCase() !== 'N/A';\nconst driveOk = dr.length >= 25 && /^[a-zA-Z0-9_-]{25,}$/.test(dr);\nif (prodOk && driveOk) {\n  return [{\n    json: {\n      PRODUCTO: p.PRODUCTO,\n      DRIVE_ID: dr,\n      COOLDOWN_HOURS: cooldownHours\n    }\n  }];\n}\nreturn [];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "99eec1bd-88c4-4b20-ac67-b572d0f45645",
+      "name": "Normalizar Telegram",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        2704,
+        672
+      ],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nlet cooldownHours = 48;\ntry {\n  cooldownHours = $('⚙️ Variables de Configuración').first().json.COOLDOWN_HOURS || 48;\n} catch(e) {}\nconst p = input.telegram_product;\nconst dr = typeof (p && p.DRIVE_ID) === 'string' ? p.DRIVE_ID.trim() : '';\nconst prodOk = p && typeof p.PRODUCTO === 'string' && p.PRODUCTO.trim() !== '' && p.PRODUCTO.trim().toUpperCase() !== 'N/A';\nconst driveOk = dr.length >= 25 && /^[a-zA-Z0-9_-]{25,}$/.test(dr);\nif (prodOk && driveOk) {\n  return [{\n    json: {\n      PRODUCTO: p.PRODUCTO,\n      DRIVE_ID: dr,\n      COOLDOWN_HOURS: cooldownHours\n    }\n  }];\n}\nreturn [];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "117d88ca-1ffb-4295-b920-e76b5ab59430",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [
+        112,
+        400
+      ],
+      "webhookId": "236592d4-72e8-4db3-92d2-0eb204e67dcf",
+      "parameters": {
+        "path": "marketing-expert-trigger",
+        "options": {}
+      },
+      "typeVersion": 1
+    },
+    {
+      "id": "invoke-proxy-id",
+      "name": "🧠 Invocar Proxy Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1424,
+        240
+      ],
+      "parameters": {
+        "url": "http://172.16.1.1:20128/v1/chat/completions",
+        "method": "POST",
+        "options": {
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Bearer sk-5383286d638b3ab0-d30aee-50037dc3"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        "jsonBody": "={{ $json }}",
+        "sendBody": true,
+        "specifyBody": "json"
+      },
+      "typeVersion": 4.2
+    },
+    {
+      "id": "format-request-id",
+      "name": "⚙️ Formatear Petición Proxy",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1248,
+        240
+      ],
+      "parameters": {
+        "jsCode": "const candidates = $('⚙️ Evaluar Estado Multicanal').first().json.candidatos || [];\nconst selectedModel = $('⚙️ Configurar y Registrar Modelo').first().json.selectedModel;\nlet extraPrompt = \"\";\ntry {\n  extraPrompt = $('⚙️ Variables de Configuración').first().json.EXTRA_PROMPT || \"\";\n} catch(e) {}\n\nlet systemPrompt = \"Analiza el catálogo de candidatos. Selecciona un producto para cada canal de publicación (Facebook, Instagram, WhatsApp, Telegram) que tenga su elegibilidad en true. Prioriza los que estén en rebaja y tengan bajo stock de forma agrupada por categorías. REGLA CRITICA: Si para un canal NO existe ningun producto elegible, OMITE completamente esa propiedad en tu respuesta - nunca inventes productos ni uses placeholders como N/A. Si la lista de candidatos esta vacia, responde solo {\\\"resetNeeded\\\": false} sin ninguna propiedad de canal.\";\n\nif (extraPrompt && extraPrompt.trim().length > 0) {\n  systemPrompt += \"\\n\\nInstrucción Adicional Prioritaria del Usuario: \" + extraPrompt.trim();\n}\n\nconst payload = {\n  model: selectedModel,\n  response_format: {\n    type: \"json_schema\",\n    json_schema: {\n      name: \"marketing_decision\",\n      schema: {\n        type: \"object\",\n        properties: {\n          facebook_product: {\n            type: \"object\",\n            properties: {\n              PRODUCTO: { type: \"string\" },\n              DRIVE_ID: { type: \"string\" }\n            }\n          },\n          instagram_product: {\n            type: \"object\",\n            properties: {\n              PRODUCTO: { type: \"string\" },\n              DRIVE_ID: { type: \"string\" }\n            }\n          },\n          whatsapp_product: {\n            type: \"object\",\n            properties: {\n              PRODUCTO: { type: \"string\" },\n              DRIVE_ID: { type: \"string\" }\n            }\n          },\n          telegram_product: {\n            type: \"object\",\n            properties: {\n              PRODUCTO: { type: \"string\" },\n              DRIVE_ID: { type: \"string\" }\n            }\n          }\n        }\n      }\n    }\n  },\n  messages: [\n    { role: \"system\", content: systemPrompt },\n    { role: \"user\", content: candidates.length === 0\n        ? 'La lista de candidatos esta VACIA. No hay productos disponibles para publicar en este momento. Responde EXACTAMENTE este JSON y nada mas: {\"resetNeeded\": false}'\n        : \"Catálogo de candidatos: \" + JSON.stringify(candidates) }\n  ]\n};\nreturn [{ json: payload }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "config-register-model-id",
+      "name": "⚙️ Configurar y Registrar Modelo",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1008,
+        224
+      ],
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst path = '/data/tmp_post/last_model.json';\n\n// 1. Detect command from Webhook\nlet cmd = \"\";\ntry {\n  const webhookCmd = $('Webhook Trigger').first().json.query?.cmd;\n  if (webhookCmd) cmd = webhookCmd;\n} catch(e) {}\n\ntry {\n  const webhookMsg = $('Webhook Trigger').first().json.body?.message;\n  if (webhookMsg) {\n    if (webhookMsg.includes(\"/pro\")) cmd = \"/pro\";\n    if (webhookMsg.includes(\"/free\")) cmd = \"/free\";\n  }\n} catch(e) {}\n\n// 2. Load last model\nlet lastModel = \"gemini/gemini-3.5-flash\";\ntry {\n  if (fs.existsSync(path)) {\n    const raw = fs.readFileSync(path, 'utf8');\n    const data = JSON.parse(raw);\n    if (data && data.model) {\n      lastModel = data.model;\n    }\n  }\n} catch(e) {}\n\n// 3. Determine active model\nlet selectedModel = lastModel;\nif (cmd.includes(\"/pro\")) {\n  selectedModel = \"gemini/gemini-3.5-flash\";\n} else if (cmd.includes(\"/free\")) {\n  selectedModel = \"gemini/gemini-3.5-flash\";\n}\n\n// 4. Save selected model\ntry {\n  fs.writeFileSync(path, JSON.stringify({ model: selectedModel }), 'utf8');\n} catch(e) {}\n\nreturn [{\n  json: {\n    selectedModel,\n    cmdDetected: cmd || \"none\"\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "save-decision-fs-id",
+      "name": "💾 Guardar decision.json",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1632,
+        240
+      ],
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst path = '/data/tmp_post/decision.json';\nconst response = $input.first().json;\n\n// Extract the string content\nconst decisionText = response.choices[0].message.content;\n\n// Write directly to disk\nfs.writeFileSync(path, decisionText, 'utf8');\n\nreturn [{ json: { success: true, path } }];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "user-config-node-id",
+      "name": "⚙️ Variables de Configuración",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        384,
+        240
+      ],
+      "parameters": {
+        "jsCode": "// VARIABLES DE CONFIGURACIÓN DEL USUARIO\nconst COOLDOWN_HOURS = 48;\nconst EXTRA_PROMPT = \"\";\n\nconst items = $input.all();\nreturn items.map(item => ({\n  json: {\n    ...item.json,\n    COOLDOWN_HOURS,\n    EXTRA_PROMPT\n  }\n}));",
+        "language": "javaScript"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "if-has-candidates-id",
+      "name": "🔀 ¿Hay Candidatos?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        700,
+        400
+      ],
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "version": 3,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-candidates-gt-0",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "leftValue": "={{ ($json.candidatos || []).length }}",
+              "rightValue": 0
+            }
+          ]
+        }
+      },
+      "typeVersion": 2.3
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "📊 Leer Catálogo Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Facebook": {
+      "main": [
+        [
+          {
+            "node": "💻 Facebook Sub-flujo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Telegram": {
+      "main": [
+        [
+          {
+            "node": "✈️ Telegram Sub-flujo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "📲 WhatsApp Sub-flujo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar Instagram": {
+      "main": [
+        [
+          {
+            "node": "📸 Instagram Sub-flujo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unificador de Canales": {
+      "main": [
+        [
+          {
+            "node": "📝 Actualizar Estados Canales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 ¿Hay Candidatos?": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Convertir a Archivo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Normalizar Facebook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Normalizar WhatsApp",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Normalizar Instagram",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Normalizar Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💻 Facebook Sub-flujo": {
+      "main": [
+        [
+          {
+            "node": "Unificador de Canales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📖 Leer decision.json": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Parsear Decisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📲 WhatsApp Sub-flujo": {
+      "main": [
+        [
+          {
+            "node": "Unificador de Canales",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "🔀 ¿Error Detectado?": {
+      "main": [
+        [
+          {
+            "node": "📲 Notificar Error por WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Parsear Decisión": {
+      "main": [
+        [
+          {
+            "node": "Normalizar Facebook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Normalizar WhatsApp",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Normalizar Instagram",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Normalizar Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📸 Instagram Sub-flujo": {
+      "main": [
+        [
+          {
+            "node": "Unificador de Canales",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "⏰ Temporizador (1 Hora)": {
+      "main": [
+        [
+          {
+            "node": "📊 Leer Catálogo Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✈️ Telegram Sub-flujo": {
+      "main": [
+        [
+          {
+            "node": "Unificador de Canales",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "🧠 Invocar Proxy Gemini": {
+      "main": [
+        [
+          {
+            "node": "💾 Guardar decision.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Convertir a Archivo": {
+      "main": [
+        [
+          {
+            "node": "💾 Guardar contexto.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Guardar contexto.json": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Configurar y Registrar Modelo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "💾 Guardar decision.json": {
+      "main": [
+        [
+          {
+            "node": "📖 Leer decision.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Evaluar Estado Multicanal": {
+      "main": [
+        [
+          {
+            "node": "🔀 ¿Hay Candidatos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Formatear Petición Proxy": {
+      "main": [
+        [
+          {
+            "node": "🧠 Invocar Proxy Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 Leer Catálogo Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Variables de Configuración",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Variables de Configuración": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Evaluar Estado Multicanal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Configurar y Registrar Modelo": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Formatear Petición Proxy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

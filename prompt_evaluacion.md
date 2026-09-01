@@ -1,6 +1,6 @@
 # 📊 Evaluación de Prompts y Flujo de Trabajo Agéntico
 
-## Proyecto: facebookBOT
+## Proyecto: Gestor
 ## Fecha de Evaluación: 6 de julio, 2026
 ## Evaluador: Roberto (AI Workflow Analyst)
 
@@ -8,7 +8,7 @@
 
 ## Resumen Ejecutivo
 
-Este informe presenta una evaluación detallada de los prompts y las prácticas de interacción agéntica del desarrollador durante el trabajo en el proyecto **facebookBOT**. El análisis se basa en el historial de conversaciones extraído del archivo de logs `transcript.jsonl` del Conversation ID `6d0a60e2-9a4c-4cd3-a6b6-95666892e452`.
+Este informe presenta una evaluación detallada de los prompts y las prácticas de interacción agéntica del desarrollador durante el trabajo en el proyecto **Gestor**. El análisis se basa en el historial de conversaciones extraído del archivo de logs `transcript.jsonl` del Conversation ID `6d0a60e2-9a4c-4cd3-a6b6-95666892e452`.
 
 El usuario demuestra una **madurez técnica alta** y un entendimiento sólido de las limitaciones de los modelos de lenguaje (LLM). Destaca su capacidad para evitar la complacencia (el sesgo de aceptar todo lo que la IA propone), su rigidez para evitar antipatrones de desarrollo (como el uso excesivo de nodos de código para evadir problemas de configuración), y su excelente gestión de control de daños y reversión cuando comete un error de contexto.
 

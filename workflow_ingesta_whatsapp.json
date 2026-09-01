@@ -1,0 +1,60 @@
+{
+  "id": "NgPFwrUQufkxh8K1",
+  "name": "Ingesta WhatsApp",
+  "active": true,
+  "nodes": [
+    {
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "id": "trigger-id",
+      "parameters": {
+        "reason": "Entrada del flujo"
+      },
+      "position": [
+        100,
+        200
+      ]
+    },
+    {
+      "id": "insert-queue-id",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        300,
+        200
+      ],
+      "name": "Insert Queue",
+      "parameters": {
+        "query": "=INSERT INTO whatsapp_queue (producto, drive_id) SELECT LEFT('{{ ($json.PRODUCTO || $json.producto || '').replace(/Limpiar.*$/,'').replace(/\\s+/g,' ').trim() }}', 255), regexp_replace('{{ $json.DRIVE_ID || $json.drive_id }}', '\\s.*$', '') WHERE regexp_replace('{{ $json.DRIVE_ID || $json.drive_id }}', '\\\\s.*$', '') ~ '^[a-zA-Z0-9_-]{25,}$' AND NOT EXISTS (SELECT 1 FROM whatsapp_queue WHERE (regexp_replace(producto, '\\s+', ' ', 'g') = regexp_replace('{{ ($json.PRODUCTO || $json.producto || '').replace(/Limpiar.*$/,'').replace(/\\s+/g,' ').trim() }}', '\\s+', ' ', 'g') OR drive_id = regexp_replace('{{ $json.DRIVE_ID || $json.drive_id }}', '\\s.*$', '')) AND (estado = 'PENDIENTE' OR (estado = 'COMPLETADO' AND fecha_envio > NOW() - INTERVAL '15 days'))) AND NOT ('{{ ($json.PRODUCTO || $json.producto || '').replace(/Limpiar.*$/,'').replace(/\\s+/g,' ').trim() }}' ~ '\\s*\\(\\d+\\)\\s*$');",
+        "operation": "executeQuery"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "qq6LeroBSIWTFfx2",
+          "name": "postgres_carmay"
+        }
+      },
+      "typeVersion": 2.2
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "type": "main",
+            "node": "Insert Queue"
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true
+  }
+}

@@ -152,9 +152,13 @@ Lee de forma asíncrona la tabla PostgreSQL `facebook_queue` y publica en grupos
 | 13 | `🧹 Limpiar Temporal` | `executeCommand` | **Limpieza de Disco:** Ejecuta `rm -f /data/tmp_post/facebook_item.jpg /data/tmp_post/pw_step*.png 2>/dev/null || true` para mantener el uso de disco en 0 KB. |
 
 ### 4.3 Script Playwright (`facebook_pw_poster.js`)
-- **Ubicación:** `/opt/n8ncarmay/facebook_pw_poster.js` (`/data/facebook_pw_poster.js` en Docker)
-- **Caché Persistente:** Configurado `process.env.PLAYWRIGHT_BROWSERS_PATH = '/data/tmp_post/.cache'` para evitar pérdida de binarios de Chromium tras reinicios del contenedor.
-- **Cookies de Sesión:** Carga cookies desde `/data/REDACTED_COOKIES`. Si las cookies expiran o son invalidadas por Facebook, el script sale con **código de error 2** (`SESIÓN INVÁLIDA`), lo cual es capturado por el flujo de n8n para marcar el ítem como `FALLIDO` sin congelar la cola.
+- **Ubicación:** `/opt/n8ncarmay/facebook_pw_poster.js` (`/data/facebook_pw_poster.js` en Docker).
+- **Navegador con Perfil Persistente (`launchPersistentContext`):** Almacena y reutiliza el perfil completo del navegador en `/data/tmp_post/facebook_browser_profile` (cookies, `localStorage`, `IndexedDB`), evitando que Facebook invalide la sesión.
+- **Auto-Renovación de Cookies en Disco:** Al finalizar cada publicación exitosa, captura las cookies renovadas por Facebook y actualiza `/data/REDACTED_COOKIES` automáticamente.
+- **Auto-Limpieza de Bloqueo (`SingletonLock`):** Borra automáticamente cualquier archivo de bloqueo `SingletonLock` en el perfil si el contenedor o el VPS sufren una caída repentina.
+- **Límite Estricto de Caché en Disco:** Configurado `--disk-cache-size=104857600` (máximo 100 MB) para controlar el almacenamiento.
+- **Caché de Binarios de Chromium:** Configurado `process.env.PLAYWRIGHT_BROWSERS_PATH = '/data/tmp_post/.cache'` para mantener los binarios entre reinicios del contenedor.
+- **Detección Estricta de Sesión:** Si la sesión es revocada, sale con **código de error 2** (`SESIÓN INVÁLIDA`), capturado por n8n para marcar el ítem como `FALLIDO` sin congelar la cola.
 
 ---
 

@@ -102,25 +102,25 @@
       ],
       "parameters": {
         "conditions": {
+          "conditions": [
+            {
+              "id": "cond-real-data",
+              "leftValue": "={{ $input.first().json.id !== undefined && $input.first().json.producto !== undefined && $('Get Target Group').first().json?.target_group_id !== undefined }}",
+              "operator": {
+                "singleValue": true,
+                "type": "boolean",
+                "operation": "true"
+              },
+              "rightValue": true
+            }
+          ],
+          "combinator": "and",
           "options": {
             "version": 2,
             "leftValue": "",
             "caseSensitive": true,
             "typeValidation": "strict"
-          },
-          "combinator": "and",
-          "conditions": [
-            {
-              "id": "cond-real-data",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              },
-              "leftValue": "={{ $input.first().json.id !== undefined && $input.first().json.producto !== undefined }}",
-              "rightValue": true
-            }
-          ]
+          }
         }
       },
       "typeVersion": 2.3
@@ -401,8 +401,8 @@
         300
       ],
       "parameters": {
-        "query": "=INSERT INTO whatsapp_sent_log (producto, drive_id, group_id) VALUES ('{{ $('Loop Batch').item.json.producto }}', '{{ $('Loop Batch').item.json.drive_id }}', '{{ $('Get Target Group').item.json.target_group_id }}'); UPDATE whatsapp_queue SET grupos_enviados = array_append(grupos_enviados, '{{ $('Get Target Group').item.json.target_group_id }}'), estado = CASE WHEN (SELECT count(*) FROM whatsapp_groups WHERE activo = true) <= array_length(array_append(grupos_enviados, '{{ $('Get Target Group').item.json.target_group_id }}'), 1) THEN 'COMPLETADO' ELSE 'PENDIENTE' END, fecha_envio = CASE WHEN (SELECT count(*) FROM whatsapp_groups WHERE activo = true) <= array_length(array_append(grupos_enviados, '{{ $('Get Target Group').item.json.target_group_id }}'), 1) THEN NOW() ELSE fecha_envio END WHERE id = {{ $('Loop Batch').item.json.id }};",
-        "operation": "executeQuery"
+        "operation": "executeQuery",
+        "query": "=INSERT INTO whatsapp_sent_log (producto, drive_id, group_id) VALUES ('{{ ($('Loop Batch').item.json.producto || '').replace(/'/g, \"''\") }}', '{{ $('Loop Batch').item.json.drive_id }}', '{{ $('Get Target Group').item.json.target_group_id }}'); UPDATE whatsapp_queue SET grupos_enviados = array_append(grupos_enviados, '{{ $('Get Target Group').item.json.target_group_id }}'), estado = CASE WHEN (SELECT count(*) FROM whatsapp_groups WHERE activo = true) <= array_length(array_append(grupos_enviados, '{{ $('Get Target Group').item.json.target_group_id }}'), 1) THEN 'COMPLETADO' ELSE 'PENDIENTE' END, fecha_envio = CASE WHEN (SELECT count(*) FROM whatsapp_groups WHERE activo = true) <= array_length(array_append(grupos_enviados, '{{ $('Get Target Group').item.json.target_group_id }}'), 1) THEN NOW() ELSE fecha_envio END WHERE id = {{ $('Loop Batch').item.json.id }};"
       },
       "credentials": {
         "postgres": {

@@ -1,0 +1,15 @@
+--- a/docker-compose-vps.yml
++++ b/docker-compose-vps.yml
+@@ -61,6 +61,8 @@
+       - CARMAY_FOTOS_CRUDAS=${CARMAY_FOTOS_CRUDAS}
+       - CARMAY_LOGO_PATH=${CARMAY_LOGO_PATH}
++    extra_hosts:
++      - "host.docker.internal:host-gateway"
+     depends_on:
+       postgres:
+         condition: service_healthy
+
+# Para aplicar:
+# cd /opt/n8ncarmay && sudo cp docker-compose-vps.yml docker-compose-vps.yml.bak
+# Agregar manualmente las 2 líneas después de CARMAY_LOGO_PATH y antes de depends_on
+# Luego: sudo docker compose up -d n8n

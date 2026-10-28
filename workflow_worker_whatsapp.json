@@ -271,7 +271,7 @@
           "parameters": [
             {
               "name": "x-api-key",
-              "value": "REDACTED_BAILEYS_API_KEY"
+              "value": "={{ $env.BAILEYS_API_KEY || 'REPLACE_WITH_BAILEYS_API_KEY' }}"
             }
           ]
         }
@@ -316,7 +316,7 @@
           "parameters": [
             {
               "name": "x-api-key",
-              "value": "REDACTED_BAILEYS_API_KEY"
+              "value": "={{ $env.BAILEYS_API_KEY || 'REPLACE_WITH_BAILEYS_API_KEY' }}"
             }
           ]
         }
@@ -385,7 +385,7 @@
           "parameters": [
             {
               "name": "x-api-key",
-              "value": "REDACTED_BAILEYS_API_KEY"
+              "value": "={{ $env.BAILEYS_API_KEY || 'REPLACE_WITH_BAILEYS_API_KEY' }}"
             }
           ]
         }

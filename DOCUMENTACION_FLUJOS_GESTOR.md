@@ -103,7 +103,7 @@ Es el **cerebro ejecutivo** del sistema. Evalúa de forma continua el catálogo 
 | 6 | `💾 Guardar contexto.json` | `readWriteFile` | Persiste `/data/tmp_post/contexto.json` en disco para respaldo de contexto. |
 | 7 | `⚙️ Configurar y Registrar Modelo` | `code` (JS) | Lee `/data/tmp_post/last_model.json` y configura el modelo activo. Establecido por defecto en `gemini/gemini-3.5-flash`. |
 | 8 | `⚙️ Formatear Petición Proxy` | `code` (JS) | Construye el cuerpo JSON del prompt. Define la directiva de negocio ("Selecciona 1 producto por canal elegible, prioriza rebaja/bajo stock por categoría, genera esquema JSON y establece resetNeeded en true si todo se agotó") y adjunta `response_format` con esquema estricto. |
-| 9 | `🧠 Invocar Proxy Gemini` | `httpRequest` | Realiza llamada `POST` a `http://172.16.1.1:20128/v1/chat/completions` con token `Bearer sk-5383286d638b3ab0-d30aee-50037dc3` y modelo `gemini/gemini-3.5-flash`. |
+| 9 | `🧠 Invocar Proxy Gemini` | `httpRequest` | Realiza llamada `POST` a `http://172.16.1.1:20128/v1/chat/completions` con token configurado en variable de entorno `LLM_PROXY_TOKEN` y modelo `gemini/gemini-3.5-flash`. |
 | 10 | `💾 Guardar decision.json` | `code` (JS) | Escribe el contenido de respuesta del modelo en `/data/tmp_post/decision.json`. |
 | 11 | `📖 Leer decision.json` | `readWriteFile` | Lee `/data/tmp_post/decision.json` del disco. |
 | 12 | `⚙️ Parsear Decisión` | `code` (JS) | Parsea el string JSON devuelto por Gemini 3.5 Flash y desinfecta los `DRIVE_ID`s con regex `[^a-zA-Z0-9_-]` para eliminar cualquier residuo de texto. |
@@ -311,7 +311,7 @@ Si el nodo `🧠 Invocar Proxy Gemini` da error de conexión:
 1. Comprueba que el proceso OmniRoute escuche en el port 20128 del VPS.
 2. Prueba la conectividad desde el contenedor de n8n:
    ```bash
-   docker exec n8n-app curl -s http://172.16.1.1:20128/v1/models -H "Authorization: Bearer sk-5383286d638b3ab0-d30aee-50037dc3"
+   docker exec n8n-app curl -s http://172.16.1.1:20128/v1/models -H "Authorization: Bearer <TU_TOKEN>"
    ```
 
 ### C. Purga o Reset Completo de la Cola

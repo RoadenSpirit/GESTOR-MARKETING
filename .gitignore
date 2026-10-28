@@ -1,0 +1,16 @@
+# Archivos de entorno y credenciales sensibles (NUNCA SUBIR)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+REDACTED_AUTH_SESSION/
+
+# Dependencias y logs
+node_modules/
+*.log
+.DS_Store
+
+# Directorios locales de agentes y memoria
+.agents/
+.engram/

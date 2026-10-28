@@ -540,7 +540,7 @@
             "parameters": [
               {
                 "name": "Authorization",
-                "value": "Bearer sk-5383286d638b3ab0-d30aee-50037dc3"
+                "value": "={{ $env.LLM_PROXY_TOKEN || 'REPLACE_WITH_LLM_PROXY_TOKEN' }}"
               },
               {
                 "name": "Content-Type",
